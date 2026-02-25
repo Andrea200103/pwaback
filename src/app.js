@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import authRoutes from "./src/routes/auth.routes.js";
-import taskRoutes from "./src/routes/task.routes.js";
-import { connectToDB } from "./src/db/connect.js";
+import authRoutes from "./routes/auth.routes.js";
+import taskRoutes from "./routes/task.routes.js";
+import { connectToDB } from "./db/connect.js";
 
 const app = express();
 
@@ -11,7 +11,7 @@ app.use(cors({
     origin:[
         "http://localhost:5173",
         process.env.FRONT_ORIGIN || ""
-    ].filter(boolean),
+    ].filter(Boolean),
     credentials: true
 })
 );
