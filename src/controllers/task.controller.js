@@ -4,7 +4,16 @@ import Task from "../models/Task.js";
 const allowed = ["Pendiente", "En Progreso", "Completada"]; // <-- usa este nombre en todos lados
 
 export async function list(req, res) {
-  const items = await Task.find({ user: req.userId, deleted: false }).sort({ createdAt: -1 });
+  const { project } = req.query;
+  const filter = { deleted: false };
+
+  if (project) {
+    filter.project = project;
+  } else {
+    filter.user = req.userId;
+  }
+
+  const items = await Task.find(filter).sort({ createdAt: -1 });
   res.json({ items });
 }
 
@@ -13,11 +22,13 @@ export async function create(req, res) {
   if (!title) return res.status(400).json({ message: "El título es requerido" });
 
   const task = await Task.create({
-    user: req.userId,
-    title,
-    description,
-    status: allowed.includes(status) ? status : "Pendiente", // <-- allowed
-    clienteId,
+  user: req.userId,
+  title,
+  description,
+  status: allowed.includes(status) ? status : "Pendiente",
+  clienteId,
+  project: project || null,   // <- agrega esta línea
+
   });
   res.status(201).json({ task });
 }

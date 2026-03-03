@@ -4,6 +4,9 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
 import { connectToDB } from "./db/connect.js";
+import projectRoutes from "./routes/project.routes.js";
+import invitationRoutes from "./routes/invitation.routes.js";
+
 
 const app = express();
 
@@ -29,4 +32,6 @@ app.get("/", (_req, res) => res.json({ok: true, name:"pwatodo"}));
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 
+app.use("/api/projects", projectRoutes);
+app.use("/api/invitations", invitationRoutes);
 export default app;
