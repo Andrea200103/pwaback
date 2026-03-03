@@ -1,7 +1,36 @@
 import crypto from "crypto";
+import nodemailer from "nodemailer";
 import Invitation from "../models/Invitation.js";
 import Project from "../models/Project.js";
 import User from "../models/User.js";
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS,
+  },
+});
+
+async function sendEmail(to, inviteLink, projectName, invitedByName) {
+  await transporter.sendMail({
+    from: `"To-Do PWA" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `Te invitaron a colaborar en "${projectName}"`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto">
+        <h2>¡Hola!</h2>
+        <p><strong>${invitedByName}</strong> te invitó a colaborar en el proyecto <strong>${projectName}</strong>.</p>
+        <a href="${inviteLink}" style="
+          display:inline-block;background:#1f6feb;color:#fff;
+          padding:12px 24px;border-radius:8px;text-decoration:none;
+          font-weight:bold;margin:16px 0
+        ">Aceptar invitación</a>
+        <p style="color:#888;font-size:12px">Este enlace expira en 7 días.</p>
+      </div>
+    `,
+  });
+}
 
 export async function sendInvitation(req, res) {
   const { email, projectId } = req.body;
@@ -24,7 +53,14 @@ export async function sendInvitation(req, res) {
   await Invitation.create({ project: projectId, invitedBy: req.userId, email, token, expiresAt });
 
   const inviteLink = `${process.env.FRONT_ORIGIN}/invite/${token}`;
-  console.log(`Invitación para ${email}: ${inviteLink}`);
+
+  try {
+    const inviter = await User.findById(req.userId);
+    await sendEmail(email, inviteLink, project.name, inviter.name);
+  } catch (err) {
+    console.error("Error enviando email:", err.message);
+    // No falla la invitación si el email falla
+  }
 
   res.status(201).json({ ok: true, inviteLink });
 }
@@ -59,4 +95,5 @@ export async function acceptInvitation(req, res) {
     .populate("owner", "name email")
     .populate("members", "name email");
 
-  res.json({ ok: true, project }) };
+  res.json({ ok: true, project });
+}
