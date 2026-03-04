@@ -1,13 +1,19 @@
-// controllers/task.controller.js
 import Task from "../models/Task.js";
+import Project from "../models/Project.js";
 
-const allowed = ["Pendiente", "En Progreso", "Completada"]; // <-- usa este nombre en todos lados
+const allowed = ["Pendiente", "En Progreso", "Completada"];
 
 export async function list(req, res) {
   const { project } = req.query;
   const filter = { deleted: false };
 
   if (project) {
+    // Verificar que el usuario es miembro del proyecto
+    const proj = await Project.findOne({
+      _id: project,
+      $or: [{ owner: req.userId }, { members: req.userId }],
+    });
+    if (!proj) return res.status(403).json({ message: "No tienes acceso a este proyecto" });
     filter.project = project;
   } else {
     filter.user = req.userId;
@@ -18,17 +24,25 @@ export async function list(req, res) {
 }
 
 export async function create(req, res) {
-  const { title, description = "", status = "Pendiente", clienteId } = req.body;
+  const { title, description = "", status = "Pendiente", clienteId, project } = req.body;
   if (!title) return res.status(400).json({ message: "El título es requerido" });
 
-  const task = await Task.create({
-  user: req.userId,
-  title,
-  description,
-  status: allowed.includes(status) ? status : "Pendiente",
-  clienteId,
-  project: project || null,   // <- agrega esta línea
+  // Si tiene proyecto, verificar que el usuario es miembro
+  if (project) {
+    const proj = await Project.findOne({
+      _id: project,
+      $or: [{ owner: req.userId }, { members: req.userId }],
+    });
+    if (!proj) return res.status(403).json({ message: "No tienes acceso a este proyecto" });
+  }
 
+  const task = await Task.create({
+    user: req.userId,
+    title,
+    description,
+    status: allowed.includes(status) ? status : "Pendiente",
+    clienteId,
+    project: project || null,
   });
   res.status(201).json({ task });
 }
@@ -40,27 +54,52 @@ export async function update(req, res) {
   if (status && !allowed.includes(status))
     return res.status(400).json({ message: "Estado inválido" });
 
-  const task = await Task.findOneAndUpdate(
-    { _id: id, user: req.userId },
-    { title, description, status },
-    { new: true }
-  );
+  // Buscar la tarea — puede ser propia o de un proyecto donde es miembro
+  const task = await Task.findById(id);
   if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
+
+  // Verificar acceso
+  if (task.project) {
+    const proj = await Project.findOne({
+      _id: task.project,
+      $or: [{ owner: req.userId }, { members: req.userId }],
+    });
+    if (!proj) return res.status(403).json({ message: "No tienes acceso" });
+  } else if (String(task.user) !== String(req.userId)) {
+    return res.status(403).json({ message: "No tienes acceso" });
+  }
+
+  task.title = title ?? task.title;
+  task.description = description ?? task.description;
+  if (status) task.status = status;
+  await task.save();
+
   res.json({ task });
 }
 
 export async function remove(req, res) {
   const { id } = req.params;
-  const task = await Task.findOneAndUpdate(
-    { _id: id, user: req.userId },
-    { deleted: true },
-    { new: true }
-  );
+
+  const task = await Task.findById(id);
   if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
+
+  // Verificar acceso
+  if (task.project) {
+    const proj = await Project.findOne({
+      _id: task.project,
+      $or: [{ owner: req.userId }, { members: req.userId }],
+    });
+    if (!proj) return res.status(403).json({ message: "No tienes acceso" });
+  } else if (String(task.user) !== String(req.userId)) {
+    return res.status(403).json({ message: "No tienes acceso" });
+  }
+
+  task.deleted = true;
+  await task.save();
+
   res.json({ ok: true });
 }
 
-/** ENDPOINT PARA SINCRONIZACIÓN OFFLINE: crea/actualiza por clienteId y devuelve el mapeo */
 export async function bulksync(req, res) {
   try {
     const { tasks = [] } = req.body;
