@@ -22,3 +22,12 @@ export async function getProject(req, res) {
   if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
   res.json({ project });
 }
+
+// Eliminar proyecto
+export async function deleteProject(req, res) {
+  const project = await Project.findOne({ _id: req.params.id, owner: req.userId });
+  if (!project) return res.status(403).json({ message: "Solo el dueño puede eliminar el proyecto" });
+  
+  await Project.findByIdAndDelete(req.params.id);
+  res.json({ ok: true });
+}
