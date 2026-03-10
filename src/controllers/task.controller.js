@@ -8,7 +8,6 @@ export async function list(req, res) {
   const filter = { deleted: false };
 
   if (project) {
-    // Verificar que el usuario es miembro del proyecto
     const proj = await Project.findOne({
       _id: project,
       $or: [{ owner: req.userId }, { members: req.userId }],
@@ -19,7 +18,9 @@ export async function list(req, res) {
     filter.user = req.userId;
   }
 
-  const items = await Task.find(filter).sort({ createdAt: -1 });
+  const items = await Task.find(filter)
+    .populate("assignedTo", "name email") // <- agrega
+    .sort({ createdAt: -1 });
   res.json({ items });
 }
 
@@ -27,7 +28,6 @@ export async function create(req, res) {
   const { title, description = "", status = "Pendiente", clienteId, project } = req.body;
   if (!title) return res.status(400).json({ message: "El título es requerido" });
 
-  // Si tiene proyecto, verificar que el usuario es miembro
   if (project) {
     const proj = await Project.findOne({
       _id: project,
@@ -49,16 +49,14 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   const { id } = req.params;
-  const { title, description, status } = req.body;
+  const { title, description, status, assignedTo } = req.body; // <- agrega assignedTo
 
   if (status && !allowed.includes(status))
     return res.status(400).json({ message: "Estado inválido" });
 
-  // Buscar la tarea — puede ser propia o de un proyecto donde es miembro
   const task = await Task.findById(id);
   if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
 
-  // Verificar acceso
   if (task.project) {
     const proj = await Project.findOne({
       _id: task.project,
@@ -72,6 +70,7 @@ export async function update(req, res) {
   task.title = title ?? task.title;
   task.description = description ?? task.description;
   if (status) task.status = status;
+  if (assignedTo !== undefined) task.assignedTo = assignedTo || null; // <- agrega
   await task.save();
 
   res.json({ task });
@@ -83,7 +82,6 @@ export async function remove(req, res) {
   const task = await Task.findById(id);
   if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
 
-  // Verificar acceso
   if (task.project) {
     const proj = await Project.findOne({
       _id: task.project,
